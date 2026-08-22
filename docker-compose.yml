@@ -1,0 +1,24 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: telco-churn-api
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_PATH: /app/model
+      CHURN_THRESHOLD: "0.30"
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    image: telco-churn-ui
+    ports:
+      - "7860:7860"
+    environment:
+      # Reach the API through the compose network, not localhost.
+      CHURN_API_URL: http://api:8000/predict
+    depends_on:
+      - api
