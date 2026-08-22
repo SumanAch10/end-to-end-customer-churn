@@ -4,7 +4,7 @@ import pandas as pd
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.data.preprocess import preprocess_data
-from src.utils.validate_data import validate_telco_data
+from utils.validate_telco_data import validate_telco_data
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
 
