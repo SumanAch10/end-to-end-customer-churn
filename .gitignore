@@ -1,4 +1,22 @@
+# Python
 __pycache__/
 *.pyc
 .venv/
+.pytest_cache/
+
+# Data (raw + processed datasets are not versioned here)
 /data/
+
+# MLflow local tracking store and artifacts
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Runtime logs
+logs/
+
+# Stray artifact paths created by local MLflow runs
+notebooks/home/
+
+# OS / editor
+.DS_Store
