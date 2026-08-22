@@ -10,7 +10,6 @@ import pandas as pd
 import mlflow
 from mlflow import MlflowClient
 import mlflow.sklearn
-from posthog import project_root
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import average_precision_score
