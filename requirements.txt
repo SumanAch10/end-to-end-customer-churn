@@ -1,11 +1,27 @@
-pandas
-numpy
-scikit-learn
-mlflow
-fastapi
-uvicorn
-pydantic
-python-dotenv
-joblib
-great-expectations
-pytest
+# Core data / ML
+pandas==2.3.3
+numpy==2.5.1
+scikit-learn==1.9.0
+joblib==1.5.3
+
+# Experiment tracking and model packaging
+mlflow==3.15.1
+cloudpickle==3.1.2
+
+# Data validation
+great_expectations==1.19.1
+
+# Serving
+fastapi==0.141.1
+uvicorn==0.52.1
+pydantic==2.13.4
+python-dotenv==1.2.2
+
+# Frontend
+gradio==6.25.0
+requests==2.34.2
+
+# Development
+pytest==9.1.1
+httpx==0.28.1
+black==26.5.1
