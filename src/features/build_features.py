@@ -42,7 +42,6 @@ def build_features(df: pd.DataFrame) -> ColumnTransformer:
     # Second task-One hot encoding
     # Third task - Separate numeric columns and add Standard scalar
     cols = df.select_dtypes(include="object").columns.tolist()
-    cols.remove("customerID")
     num_cols = df.select_dtypes(include="number").columns
     # separate the numeric and categorical columns
 
