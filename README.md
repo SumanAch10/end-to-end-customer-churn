@@ -1,6 +1,10 @@
 # End-to-End Customer Churn Prediction
 
-Live-Link: https://end-to-end-customer-churn-1.onrender.com/
+Live link (Google Cloud Run — API and UI in one service):
+<https://telco-churn-app-c2oxxzsoaq-uc.a.run.app>
+
+The service scales to zero, so the first request after a period of inactivity
+takes a few seconds to warm up.
 
 A production-style machine learning project that predicts whether a telecom
 customer is likely to churn. It covers the full lifecycle: data validation,
@@ -25,6 +29,7 @@ Dataset: [Telco Customer Churn](https://www.kaggle.com/datasets/blastchar/telco-
 - [API reference](#api-reference)
 - [Configuration](#configuration)
 - [Docker](#docker)
+- [Google Cloud Run](#google-cloud-run)
 - [Testing](#testing)
 - [Development notes](#development-notes)
 
@@ -103,7 +108,8 @@ customer_churn_prediction/
 │   └── inference.ipynb            # loads a run's model, sanity-checks predictions
 ├── scripts/
 │   ├── run_pipeline.py            # full training pipeline + MLflow logging
-│   └── prepare_preprocessed_data.py   # validate + preprocess + save CSV
+│   ├── prepare_preprocessed_data.py   # validate + preprocess + save CSV
+│   └── deploy_cloudrun.sh         # one-command Cloud Run deploy
 ├── src/
 │   ├── data/
 │   │   ├── load_data.py           # CSV -> DataFrame with existence check
@@ -115,15 +121,19 @@ customer_churn_prediction/
 │   │   └── inference.py           # loads the model once, predicts
 │   ├── app/
 │   │   ├── main.py                # FastAPI backend
+│   │   ├── cloud_main.py          # FastAPI + Gradio in one Cloud Run service
 │   │   └── gradio_ui.py           # Gradio frontend
 │   └── utils/
 │       ├── utils.py               # logger factory
 │       └── validate_telco_data.py # Great Expectations suite
 ├── tests/
 │   ├── test_api.py                # endpoint contract tests
+│   ├── test_cloud_main.py         # Cloud Run entrypoint tests
 │   └── test_inference.py          # inference-layer tests
 ├── Dockerfile.api
 ├── Dockerfile.ui
+├── Dockerfile.cloudrun            # combined API + UI image for Cloud Run
+├── cloudbuild.yaml                # Cloud Build config (uses Dockerfile.cloudrun)
 ├── docker-compose.yml
 └── requirements.txt
 ```
@@ -389,6 +399,126 @@ docker run -p 7860:7860 -e CHURN_API_URL=http://host.docker.internal:8000/predic
 `Dockerfile.api` bakes `artifacts/production_model` into the image at
 `/app/model`, so the container needs no volume mount, no network access, and no
 MLflow server to serve predictions.
+
+---
+
+## Google Cloud Run
+
+For Google Cloud, use `Dockerfile.cloudrun`. It serves the Gradio UI and the
+prediction API from one Cloud Run service, which is simpler than wiring two
+public services together.
+
+Recommended defaults:
+
+- Region: `us-central1`
+- Service name: `telco-churn-app`
+- Public access: enabled with `--allow-unauthenticated`
+
+### Deploy
+
+Install the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install), then
+authenticate once:
+
+```bash
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+```
+
+Everything after that is one command. `scripts/deploy_cloudrun.sh` enables the
+required APIs, creates the Artifact Registry repository, builds the image and
+deploys the service. Each step is idempotent, so re-running it ships an update:
+
+```bash
+./scripts/deploy_cloudrun.sh
+```
+
+It reads these environment variables, all optional:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PROJECT_ID` | active gcloud project | Target project |
+| `REGION` | `us-central1` | Cloud Run and Artifact Registry region |
+| `SERVICE` | `telco-churn-app` | Cloud Run service name |
+| `REPO` | `telco-churn` | Artifact Registry repository name |
+| `MEMORY` | `2Gi` | Memory per instance |
+| `CHURN_THRESHOLD` | `0.30` | Classification threshold |
+
+```bash
+PROJECT_ID=my-project REGION=europe-west1 ./scripts/deploy_cloudrun.sh
+```
+
+<details>
+<summary>Equivalent manual commands</summary>
+
+```bash
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+
+gcloud artifacts repositories create telco-churn \
+  --repository-format=docker \
+  --location=us-central1
+
+# `gcloud builds submit --tag` only ever builds a file named exactly
+# "Dockerfile", so the build goes through cloudbuild.yaml to pick up
+# Dockerfile.cloudrun.
+gcloud builds submit --config cloudbuild.yaml .
+
+gcloud run deploy telco-churn-app \
+  --image us-central1-docker.pkg.dev/YOUR_PROJECT_ID/telco-churn/telco-churn-app:latest \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --port 8080 \
+  --memory 2Gi \
+  --cpu 1 \
+  --cpu-boost \
+  --min-instances 0 \
+  --max-instances 2 \
+  --set-env-vars MODEL_PATH=/app/model,CHURN_THRESHOLD=0.30
+```
+
+</details>
+
+The script prints the service URL when it finishes. To look it up again later:
+
+```bash
+gcloud run services describe telco-churn-app \
+  --region us-central1 \
+  --format='value(status.url)'
+```
+
+Useful endpoints:
+
+- `/` -> Gradio UI
+- `/predict` -> POST prediction API
+- `/health` -> health check
+
+### Verify the image locally first
+
+The Cloud Run image runs anywhere Docker does, so a failed deploy can be
+diagnosed without burning a build:
+
+```bash
+docker build -f Dockerfile.cloudrun -t telco-churn-cloudrun:local .
+docker run --rm -p 8080:8080 -e PORT=8080 telco-churn-cloudrun:local
+
+curl http://localhost:8080/health
+```
+
+Notes:
+
+- The model artifact is baked into the image from `artifacts/production_model`,
+  so the container needs no volume mount and no MLflow server.
+- The health endpoint is `/health`, **not** the conventional `/healthz`. Cloud
+  Run's Google Frontend intercepts the exact path `/healthz` and answers it with
+  its own 404, so the request never reaches the container. This is invisible
+  locally, where `/healthz` works fine.
+- `.gcloudignore` keeps the Cloud Build upload to the few files the image needs.
+  Without it, `gcloud` falls back to `.gitignore` and uploads `.git/` too.
+- `--min-instances 0` keeps idle cost down, which matters on the $300 free trial.
+- `--cpu-boost` gives the instance extra CPU during startup, which shortens the
+  cold start caused by importing scikit-learn, MLflow and Gradio.
+- `2Gi` memory is a conservative default. A local container serving predictions
+  settles around 210 MB, so `1Gi` is likely sufficient if you want to trim it.
 
 ---
 

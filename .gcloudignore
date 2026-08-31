@@ -1,0 +1,24 @@
+# Keep the Cloud Build upload small and reproducible.
+# Without this file gcloud falls back to .gitignore, which does not exclude .git/.
+.git/
+.github/
+.venv/
+.vscode/
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# Local MLflow tracking store and experiment artifacts.
+mlruns/
+mlartifacts/
+mlflow.db
+scripts/mlruns/
+
+# Datasets, logs and notebooks are not needed to serve predictions.
+data/
+logs/
+notebooks/
+great_expectations/
+
+# NOTE: artifacts/production_model is intentionally NOT ignored.
+# Dockerfile.cloudrun bakes it into the image at /app/model.
