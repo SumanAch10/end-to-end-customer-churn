@@ -1,6 +1,13 @@
 # End-to-End Customer Churn Prediction
 
-Live-Link: https://end-to-end-customer-churn-1.onrender.com/
+Live links:
+
+- **Google Cloud Run** (API + UI in one service):
+  <https://telco-churn-app-c2oxxzsoaq-uc.a.run.app>
+- **Render** (UI): <https://end-to-end-customer-churn-1.onrender.com/>
+
+Both scale to zero, so the first request after a period of inactivity takes a
+few seconds to warm up.
 
 A production-style machine learning project that predicts whether a telecom
 customer is likely to churn. It covers the full lifecycle: data validation,
